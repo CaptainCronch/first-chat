@@ -3,7 +3,8 @@ const port = 5000;
 process.stdin.setEncoding('utf-8')
 let userName
 
-const server = net.createConnection(port, console.log("cliented to port " + port)).setEncoding("utf-8");
+const server = net.createConnection(port, console.log("cliented to port " + port));
+server.setEncoding("utf-8");
 
 server.on("data", data => {
     console.log(data);
