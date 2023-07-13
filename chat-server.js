@@ -2,6 +2,7 @@
 const net = require("net");
 const path = require("path")
 const fs = require("fs");
+const { find } = require("cypress/types/lodash");
 const port = 5001;
 
 let clients = []
@@ -22,7 +23,31 @@ const server = net.createServer(client => {
     broadcast(joinMessage, client, false)
 
     client.on("data", data => {
-        broadcast(data, client);
+        let message = data.toString()
+        if (message.split("")[0] == "/"){
+            let command = message.split(' ')[0]
+            switch (command){
+                case "/w":
+                    whisper(message, client)
+                    break;
+                case "/username":
+                    username(message, client)
+                    break;
+                case "/kick":
+                    break;
+                case "/clientlist":
+                    break;
+                case "/me":
+                    break;
+                case "/help":
+                    break;
+                default:
+                    feedback("command does not exist!", client)
+                    break;
+            }
+        } else {
+            broadcast(message, client);
+        }
     })
 
     client.on("end", () => {
@@ -79,6 +104,63 @@ function broadcast(message, sender, repeat = true) {
     clients.forEach((individual) => {
         if (individual.name != currentName){
             individual.user.write(namedMessage);
+        }
+    })
+}
+
+function feedback(message, sender){
+    let currentName = findName(sender)
+
+    clients.forEach((individual) => {
+        if (individual.name == currentName){
+            individual.user.write(message);
+        }
+    })
+}
+
+function whisper(message, sender){
+    let filteredMessage = message.split(' ') // ["/w, (name), (messages)..."]
+    filteredMessage.shift() // /w
+    let targetName = filteredMessage.shift() // (name)
+    filteredMessage = filteredMessage.join(' ')
+
+    if (targetName == findName(sender)){
+        feedback("cannot whisper to yourself!", sender)
+        return;
+    }
+
+    let found = false
+    clients.forEach((individual) => {
+        if (individual.name == targetName){
+            found = true
+            individual.user.write(findName(sender) + " (whisper): " + filteredMessage);
+            log.write(findName(sender) + ` (${targetName}): ` + filteredMessage + "\n")
+        }
+    })
+    if (!found) {
+        feedback("user not found!", sender)
+    }
+}
+
+function username(request, sender){
+    let username = request.split(' ')
+    if (username.size() == 1){
+        feedback("please input a username!", sender)
+        return;
+    }
+    username = username[1]
+    clients.forEach((individual) => {
+        if (individual.name == username){
+            feedback("username taken!", sender)
+            return;
+        }
+    })
+    broadcast(`${findName(sender)} has changed their name to ${username}`, sender)
+    feedback(`changed name to ${username}`, sender)
+    clients.forEach((individual) => {
+        if (individual.name == findName(sender)){
+            
+            return;
         }
     })
 }
