@@ -1,9 +1,8 @@
-// @ts-check
 const net = require("net");
 const path = require("path")
 const fs = require("fs");
-const { find } = require("cypress/types/lodash");
 const port = 5001;
+const adminPassword = "password"
 
 let clients = []
 let uniqueClients = 0
@@ -34,12 +33,22 @@ const server = net.createServer(client => {
                     username(message, client)
                     break;
                 case "/kick":
+                    kick(message, client)
                     break;
                 case "/clientlist":
+                    clientlist(client)
                     break;
                 case "/me":
+                    me(message, client)
                     break;
                 case "/help":
+                    help(client)
+                    break;
+                case "/h":
+                    help(client)
+                    break;
+                case "/man":
+                    help(client)
                     break;
                 default:
                     feedback("command does not exist!", client)
@@ -144,30 +153,102 @@ function whisper(message, sender){
 
 function username(request, sender){
     let username = request.split(' ')
-    if (username.size() == 1){
+    let error = false
+
+    if (username.length == 1){
         feedback("please input a username!", sender)
-        return;
+        error = true
     }
+    
     username = username[1]
+
     clients.forEach((individual) => {
         if (individual.name == username){
             feedback("username taken!", sender)
-            return;
+            error = true
         }
     })
-    broadcast(`${findName(sender)} has changed their name to ${username}`, sender)
-    feedback(`changed name to ${username}`, sender)
+
+    if (error){return}
+    
     clients.forEach((individual) => {
         if (individual.name == findName(sender)){
-            
-            return;
+            broadcast(`${findName(sender)} has changed their name to ${username}`, sender, false)
+            individual.name = username
+            feedback(`changed name to ${username}`, sender)
         }
     })
 }
 
-/**
- * @param {any} currentUser
- */
+function kick(request, sender){
+    let filteredRequest = request.split(' ')
+    let error = false
+
+    if (filteredRequest.length == 1){
+        feedback("please input a username and password!", sender)
+        error = true
+    } else if (filteredRequest.length == 2){
+        feedback("please input a password!", sender)
+        error = true
+    }
+
+    if (error){return}
+    
+    let username = filteredRequest[1]
+
+    error = true
+    clients.forEach((individual) => {
+        if (individual.name == username){
+            error = false
+        }
+    })
+
+    if (username == findName(sender)){
+        feedback("cannot kick yourself!", sender)
+        return
+    }
+
+    if (error){
+        feedback("user not found!", sender)
+        return
+    }
+
+    let password = filteredRequest[2]
+
+    if (password != adminPassword){
+        feedback("incorrect password!", sender)
+        return
+    }
+
+    let kickee = clients.find(element => element.name == username).user
+    feedback("you have been kicked!", kickee)
+    broadcast(`${username} has been kicked.`, kickee, false)
+    kickee.end()
+}
+
+function clientlist(sender){
+    let list = []
+    clients.forEach(individual => {
+        list.push(individual.name)
+    })
+    if (list.length == 1) {
+        feedback(`you're all alone here...`, sender)
+    }
+
+    feedback(`users connected:\n${list.join("\n")}`, sender)
+}
+
+function me(message, sender){
+    let newMessage = message.split(" ")
+    newMessage.shift()
+    newMessage = newMessage.join(" ")
+    broadcast(`*${findName(sender)} ${newMessage}*`, sender, false)
+}
+
+function help(sender){
+    feedback("command list:\n/w [user] - sends private message to another user\n/username [name] - changes your username\n/kick [user] [password] - disconnects user from chat\n/clientlist - lists every connected user\n/me [message]- sends your message in an alternate format\n/help, /h, /man - displays this message", sender)
+}
+
 function findName(currentUser) {
     return clients.find(element => element.user == currentUser).name
 }
