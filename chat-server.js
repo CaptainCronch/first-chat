@@ -1,26 +1,37 @@
+// @ts-check
 const net = require("net");
-const port = 5000;
+const path = require("path")
+const fs = require("fs");
+const port = 5001;
 
 let clients = []
 let uniqueClients = 0
 let newUser = "Guest"
 
 process.stdin.setEncoding("utf-8");
+const log = fs.createWriteStream('./chat.log')
 
 const server = net.createServer(client => {
     client.setEncoding("utf-8");
     let templateName = newUser + (uniqueClients).toString()
     uniqueClients += 1
     clients.push({user: client, name: templateName});
-    console.log("new client connected!")
+
+    let joinMessage = templateName + " has joined."
     client.write("welcome to the chatroom!");
+    broadcast(joinMessage, client, false)
 
     client.on("data", data => {
         broadcast(data, client);
     })
 
     client.on("end", () => {
-        
+        let leaveMessage = clients.splice(clients.findIndex(element => element.user == client), 1)[0].name + " has left."
+        clients.forEach((individual) => {
+            individual.user.write(leaveMessage);
+        })
+        console.log(leaveMessage)
+        log.write(leaveMessage + "\n")
     })
 
 }).listen(port, () => {
@@ -29,15 +40,15 @@ const server = net.createServer(client => {
 
 process.stdin.on('readable', function() {
     let userInput
-    while ((userInput = process.stdin.read()) !== null) {
-        if (userInput.trim() === "help" || userInput.trim() === "man") {
+    while ((userInput = process.stdin.read().trim()) !== null) {
+        if (userInput === "help" || userInput === "man") {
             console.log(
-`    available commands:
+`   available commands:
     help/man - self-explanatory
     ls/lsc - list connected clients
     exit - server shutoff`);
         }
-        else if (userInput.trim() === "lsc" || userInput.trim() === "ls") {
+        else if (userInput === "lsc" || userInput === "ls") {
             var any = false
             clients.forEach(individual => {
                 any = true
@@ -50,21 +61,31 @@ process.stdin.on('readable', function() {
     }
 })
 
-function broadcast(message, sender) {
-    var currentName = findName(sender)
-    console.log(currentName + ": " + message);
+/**
+ * @param {string | Buffer} message
+ * @param {net.Socket} sender
+ */
+function broadcast(message, sender, repeat = true) {
+    let currentName = findName(sender)
+    let namedMessage
+    if (repeat){
+        namedMessage = currentName + ": " + message
+    } else {
+        namedMessage = message;
+        console.log(namedMessage);
+    }
+
+    log.write(namedMessage + "\n");
     clients.forEach((individual) => {
-        individual.user.write(currentName + ": " + message);
+        if (individual.name != currentName){
+            individual.user.write(namedMessage);
+        }
     })
 }
 
+/**
+ * @param {any} currentUser
+ */
 function findName(currentUser) {
-    var i = 0
-    clients.forEach((individual) => {
-        if (individual.user == currentUser){
-            console.log(clients[i].name)
-            return clients[i].name
-        }
-        i++
-    })
+    return clients.find(element => element.user == currentUser).name
 }
